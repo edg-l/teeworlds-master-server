@@ -118,9 +118,12 @@ func main() {
 					}
 
 					log.Println("Starting server.")
-					http.HandleFunc("/", Index)
 
-					err = http.ListenAndServeTLS(fmt.Sprintf(":%d", port), absCertPath, absKeyPath, nil)
+					mux := http.NewServeMux()
+
+					mux.HandleFunc("/", Index)
+
+					err = http.ListenAndServeTLS(fmt.Sprintf(":%d", port), absCertPath, absKeyPath, mux)
 
 					if err != nil {
 						log.Fatal("ListenAndServeTLS: ", err)
