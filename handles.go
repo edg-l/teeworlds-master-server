@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type ServerRegisterPayload struct {
+type ServerPayload struct {
 	Port uint16 `json:"port"`
 }
 
@@ -49,7 +49,7 @@ func Index(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		server := ServerRegisterPayload{}
+		server := ServerPayload{}
 
 		decoder := json.NewDecoder(req.Body)
 		decoder.DisallowUnknownFields()
@@ -61,7 +61,8 @@ func Index(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		serverStore.RLock()
+		serverStore.Lock()
+		defer serverStore.Unlock()
 
 		host, _, err := net.SplitHostPort(req.RemoteAddr)
 
@@ -76,21 +77,16 @@ func Index(w http.ResponseWriter, req *http.Request) {
 		}
 
 		if _, ok := serverStore.Servers[key]; ok {
-			serverStore.RUnlock()
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 
-		serverStore.RUnlock()
-
-		serverStore.Lock()
-		defer serverStore.Unlock()
-
-		expire := time.Now().Add(time.Second * 90)
+		expire := time.Now().Add(time.Second * time.Duration(Config.HeartbeatIntervalSeconds))
 
 		serverStore.Servers[key] = &ServerEntry{
 			Expire: expire,
 		}
+		// TODO: Enforce limit
 
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, &map[string]interface{}{
@@ -99,5 +95,60 @@ func Index(w http.ResponseWriter, req *http.Request) {
 
 		return
 	}
+	w.WriteHeader(http.StatusNotFound)
+}
+
+func Heartbeat(w http.ResponseWriter, req *http.Request) {
+	setupResponse(w)
+
+	if req.Method == http.MethodPost {
+		if req.Header.Get("Content-Type") != "application/json" {
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
+		}
+
+		server := ServerPayload{}
+
+		decoder := json.NewDecoder(req.Body)
+		decoder.DisallowUnknownFields()
+
+		err := decoder.Decode(&server)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		serverStore.Lock()
+		defer serverStore.Unlock()
+
+		host, _, err := net.SplitHostPort(req.RemoteAddr)
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		key := ServerKey{
+			Address: host,
+			Port:    server.Port,
+		}
+
+		if entry, ok := serverStore.Servers[key]; ok {
+			// Don't allow a heartbeat if it's too early to prevent spam.
+			if time.Now().Before(entry.Expire.Add(-time.Second * time.Duration(Config.HeartbeatIntervalSeconds-Config.HeartbeatMinWaitSeconds))) {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+
+			entry.Expire = time.Now().Add(time.Second * time.Duration(Config.HeartbeatIntervalSeconds))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	w.WriteHeader(http.StatusNotFound)
 }

@@ -17,13 +17,23 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/jinzhu/configor"
 	"github.com/urfave/cli/v2"
 )
+
+/*
+	TODO:
+	- https://github.com/teeworlds/teeworlds/issues/1703
+	- https://github.com/teeworlds/teeworlds/issues/713
+	- https://github.com/teeworlds/teeworlds/issues/1292
+*/
 
 func main() {
 	var certPath string
 	var keyPath string
 	var port int
+
+	configor.Load(&Config, "config.yml")
 
 	app := &cli.App{
 		Name:  "HTTPS Teeworlds Master Server",
@@ -88,19 +98,19 @@ func main() {
 					&cli.PathFlag{
 						Name:        "key",
 						Aliases:     []string{"k"},
-						Value:       "./key.pem",
+						Value:       Config.Key,
 						Destination: &keyPath,
 					},
 					&cli.PathFlag{
 						Name:        "cert",
 						Aliases:     []string{"c"},
-						Value:       "./cert.pem",
+						Value:       Config.Certificate,
 						Destination: &certPath,
 					},
 					&cli.IntFlag{
 						Name:        "port",
 						Aliases:     []string{"p"},
-						Value:       8283,
+						Value:       int(Config.Port),
 						Destination: &port,
 					},
 				},
@@ -117,17 +127,19 @@ func main() {
 						panic(err)
 					}
 
-					log.Println("Starting server.")
-
 					mux := http.NewServeMux()
 
 					mux.HandleFunc("/", Index)
+					mux.HandleFunc("/heartbeat", Heartbeat)
+
+					log.Println("Starting HTTPS Master server.")
 
 					err = http.ListenAndServeTLS(fmt.Sprintf(":%d", port), absCertPath, absKeyPath, mux)
 
 					if err != nil {
 						log.Fatal("ListenAndServeTLS: ", err)
 					}
+
 					return nil
 				},
 			},

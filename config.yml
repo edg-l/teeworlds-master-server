@@ -1,0 +1,5 @@
+HeartbeatIntervalSeconds: 90
+HeartbeatMinWaitSeconds: 70
+Port: 8283
+Certificate: "./cert.pem"
+Key: "./key.pem"
