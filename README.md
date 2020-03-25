@@ -1,4 +1,4 @@
-# HTTPS Teeworlds Master Server
+# HTTPS Teeworlds Master Server ![Go](https://github.com/Ryozuki/teeworlds-master-server/workflows/Go/badge.svg)
 
 ## Build
 
