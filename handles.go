@@ -34,6 +34,12 @@ func writeJSON(w http.ResponseWriter, s interface{}) bool {
 	return true
 }
 
+func ClearStore() {
+	serverStore.Lock()
+	defer serverStore.Unlock()
+	serverStore.Servers = make(map[ServerKey]*ServerEntry)
+}
+
 func Index(w http.ResponseWriter, req *http.Request) {
 	setupResponse(w)
 
@@ -51,7 +57,6 @@ func Index(w http.ResponseWriter, req *http.Request) {
 		err := decoder.Decode(&server)
 
 		if err != nil {
-			println(err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -61,7 +66,7 @@ func Index(w http.ResponseWriter, req *http.Request) {
 		host, _, err := net.SplitHostPort(req.RemoteAddr)
 
 		if err != nil {
-			w.WriteHeader(500)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -94,5 +99,5 @@ func Index(w http.ResponseWriter, req *http.Request) {
 
 		return
 	}
-	w.WriteHeader(404)
+	w.WriteHeader(http.StatusNotFound)
 }
