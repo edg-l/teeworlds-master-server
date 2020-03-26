@@ -40,7 +40,7 @@ Colorize a bit? https://github.com/logrusorgru/aurora
 
 - Servers should be able to register both ipv4 and ipv6 and be identified as the same server.
 
-- Clients should request specifying which ipv is usable by them, it can be one or both.
+- Clients should be able to know a ipv4 and ipv6 belongs to the same server.
 
 - Master server should ping server entries to know that port is forwarded and clients can connect aka "fwcheck".
 
