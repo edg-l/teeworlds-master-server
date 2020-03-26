@@ -3,3 +3,9 @@ HeartbeatMinWaitSeconds: 70
 Port: 8283
 Certificate: "./cert.pem"
 Key: "./key.pem"
+Memcached:
+  Host: "127.0.0.1"
+  Port: "11211"
+ServerIndentifier: "Master-1"
+Servers:
+- "Master-2"

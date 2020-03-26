@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bradfitz/gomemcache/memcache"
 	"github.com/jinzhu/configor"
 	"github.com/urfave/cli/v2"
 )
@@ -28,12 +29,15 @@ import (
 	- https://github.com/teeworlds/teeworlds/issues/1292
 */
 
+var memcacheClient *memcache.Client
+
 func main() {
+	memcache.New()
 	var certPath string
 	var keyPath string
 	var port int
 
-	configor.Load(&Config, "config.yml")
+	configor.Load(&config, "config.yml")
 
 	app := &cli.App{
 		Name:  "HTTPS Teeworlds Master Server",
@@ -98,19 +102,19 @@ func main() {
 					&cli.PathFlag{
 						Name:        "key",
 						Aliases:     []string{"k"},
-						Value:       Config.Key,
+						Value:       config.Key,
 						Destination: &keyPath,
 					},
 					&cli.PathFlag{
 						Name:        "cert",
 						Aliases:     []string{"c"},
-						Value:       Config.Certificate,
+						Value:       config.Certificate,
 						Destination: &certPath,
 					},
 					&cli.IntFlag{
 						Name:        "port",
 						Aliases:     []string{"p"},
-						Value:       int(Config.Port),
+						Value:       int(config.Port),
 						Destination: &port,
 					},
 				},
@@ -129,10 +133,22 @@ func main() {
 
 					mux := http.NewServeMux()
 
-					mux.HandleFunc("/", Index)
-					mux.HandleFunc("/heartbeat", Heartbeat)
+					mux.HandleFunc("/", index)
+					mux.HandleFunc("/heartbeat", heartbeat)
 
-					log.Println("Starting HTTPS Master server.")
+					log.Print("Connecting to memcached...\n")
+
+					memcacheClient = memcache.New(fmt.Sprintf("%s:%s", config.Memcached.Host, config.Memcached.Port))
+					if memcacheClient.Ping() != nil {
+						// TODO: Maybe make a mode where you can run without memcached.
+						log.Fatalf("Failed to connect to memcached")
+					}
+
+					log.Print("Connected to memcached.")
+
+					saveListToCache()
+
+					log.Println("Starting HTTPS Master server on port ", port)
 
 					err = http.ListenAndServeTLS(fmt.Sprintf(":%d", port), absCertPath, absKeyPath, mux)
 

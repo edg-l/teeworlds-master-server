@@ -12,6 +12,12 @@ Generate a self-signed key:
 
 *Note: this cert will only last 1 year.*
 
+## Dependencies
+
+You need to install https://memcached.org/
+
+You should limit the connection to the memcached server on a firewall level.
+
 ## Start
 
 `./teeworlds-master-server start`

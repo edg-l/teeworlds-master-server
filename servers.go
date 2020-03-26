@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-type ServerKey struct {
-	Address string
-	Port    uint16
+type serverKey struct {
+	Address string `json:"address"`
+	Port    uint16 `json:"port"`
 }
 
-type ServerEntry struct {
+type serverEntry struct {
 	Expire time.Time
 }
 
-type ServerStore struct {
+type serverStore struct {
 	sync.RWMutex
-	Servers map[ServerKey]*ServerEntry
+	Servers map[serverKey]*serverEntry
 }
