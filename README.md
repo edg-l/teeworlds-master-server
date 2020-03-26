@@ -1,5 +1,7 @@
 # HTTPS Teeworlds Master Server ![Go](https://github.com/Ryozuki/teeworlds-master-server/workflows/Go/badge.svg)
 
+***Work in progress***
+
 The masterserver uses memcached to cache the server entries it receives, thus multiple master servers can be used.
 
 Each master server has a configuration `config.yml` where you define a identifier, and also define which other master server entries to use by listing their identifiers.
