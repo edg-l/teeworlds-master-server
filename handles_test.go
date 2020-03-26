@@ -13,8 +13,8 @@ type createResponse struct {
 }
 
 func TestMaster(t *testing.T) {
-	t.Cleanup(ClearStore)
-	ts := httptest.NewServer(http.HandlerFunc(Index))
+	t.Cleanup(clearStore)
+	ts := httptest.NewServer(http.HandlerFunc(index))
 	defer ts.Close()
 
 	body, _ := json.Marshal(&map[string]interface{}{
@@ -65,8 +65,8 @@ func TestMaster(t *testing.T) {
 }
 
 func BenchmarkAllPortRange(b *testing.B) {
-	b.Cleanup(ClearStore)
-	ts := httptest.NewServer(http.HandlerFunc(Index))
+	b.Cleanup(clearStore)
+	ts := httptest.NewServer(http.HandlerFunc(index))
 	defer ts.Close()
 	b.ResetTimer()
 
