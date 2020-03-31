@@ -134,7 +134,6 @@ func main() {
 					mux := http.NewServeMux()
 
 					mux.HandleFunc("/", index)
-					mux.HandleFunc("/heartbeat", heartbeat)
 
 					log.Print("Connecting to memcached...\n")
 
@@ -148,7 +147,7 @@ func main() {
 
 					saveListToCache()
 
-					log.Println("Starting HTTPS Master server on port ", port)
+					log.Println("Starting HTTPS Master server on port", port)
 
 					err = http.ListenAndServeTLS(fmt.Sprintf(":%d", port), absCertPath, absKeyPath, mux)
 

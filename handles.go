@@ -5,18 +5,11 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/labstack/gommon/log"
-	"github.com/vmihailenco/msgpack/v4"
 )
 
 type serverPayload struct {
-	Port uint16 `json:"port"`
-}
-
-var store = &serverStore{
-	Servers: make(map[serverKey]*serverEntry),
+	Port  uint16 `json:"port"`
+	Token string `json:"token"`
 }
 
 func setupResponse(w http.ResponseWriter) {
@@ -25,71 +18,6 @@ func setupResponse(w http.ResponseWriter) {
 	w.Header().Set("X-XSS-Protection", "1; mode=block")
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-}
-
-func getServerKeys() []serverKey {
-	store.RLock()
-	defer store.RUnlock()
-
-	keys := make([]serverKey, 0, len(store.Servers))
-	for key := range store.Servers {
-		keys = append(keys, key)
-	}
-
-	return keys
-}
-
-func getKeysFromCache(ident string) ([]serverKey, error) {
-	item, err := memcacheClient.Get(ident)
-
-	if err != nil {
-		return []serverKey{}, err
-	}
-
-	var keys []serverKey
-
-	err = msgpack.Unmarshal(item.Value, &keys)
-
-	return keys, err
-}
-
-func saveListToCache() bool {
-	keys := getServerKeys()
-
-	b, err := msgpack.Marshal(keys)
-	if err != nil {
-		log.Warn("Could not marshal cache list: ", err)
-		return false
-	}
-
-	memcacheClient.Set(&memcache.Item{
-		Key:   config.ServerIdentifier,
-		Value: b,
-	})
-
-	return true
-}
-
-func getServerList() ([]byte, error) {
-	ourKeys, err := getKeysFromCache(config.ServerIdentifier)
-
-	if err != nil {
-		return []byte{}, err
-	}
-
-	for _, ident := range config.Servers {
-		keys, err := getKeysFromCache(ident)
-
-		// If we can't get the cached list from another master server, continue gracefully.
-		if err != nil {
-			continue
-		}
-
-		ourKeys = append(ourKeys, keys...)
-	}
-
-	js, err := json.Marshal(ourKeys)
-	return js, err
 }
 
 func writeJSON(w http.ResponseWriter, s interface{}) bool {
@@ -125,13 +53,10 @@ func index(w http.ResponseWriter, req *http.Request) {
 
 		err := decoder.Decode(&server)
 
-		if err != nil {
+		if err != nil || server.Port == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
-		store.Lock()
-		defer store.Unlock()
 
 		host, _, err := net.SplitHostPort(req.RemoteAddr)
 
@@ -140,94 +65,100 @@ func index(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		key := serverKey{
-			Address: host,
-			Port:    server.Port,
+		ip := net.ParseIP(host)
+
+		if ip == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
-		if _, ok := store.Servers[key]; ok {
-			w.WriteHeader(http.StatusForbidden)
+		exits, err := addressExists(ip)
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
+		}
+
+		if exits {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+
+		store.Lock()
+		defer store.Unlock()
+
+		if server.Token != "" {
+			key := serverKey{Token: server.Token}
+			entry, found := store.Servers[key]
+
+			if !found {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			// You shouldn't use a token when registering a server (not adding a ipv6 or ipv4 address).
+			if entry.Port != server.Port {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			if ip.To4() != nil {
+				entry.Address4 = ip
+			} else {
+				entry.Address6 = ip
+			}
+			w.WriteHeader(http.StatusCreated)
+			go saveListToCache()
+			return
+		}
+
+		key := makeKey()
+
+		// Make sure the key is unique
+		for {
+			if _, ok := store.Servers[key]; !ok {
+				break
+			}
+			key = makeKey()
 		}
 
 		expire := time.Now().Add(time.Second * time.Duration(config.HeartbeatIntervalSeconds))
 
-		store.Servers[key] = &serverEntry{
+		entry := &serverEntry{
 			Expire: expire,
+			Port:   server.Port,
 		}
+
+		if ip.To4() != nil {
+			entry.Address4 = ip
+		} else {
+			entry.Address6 = ip
+		}
+
+		store.Servers[key] = entry
 
 		// Create a goroutine here, so when the defered mutex close gets called, this will proceed.
 		go saveListToCache()
 
-		// TODO: Enforce limit
-
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, &map[string]interface{}{
-			"expire": expire.Unix(),
+			"token": key.Token,
 		})
 
 		return
 	} else if req.Method == http.MethodGet {
 
-		keys, _ := getServerList()
+		entries, _ := getServerList()
 
-		w.Write(keys)
-		return
-	}
-	w.WriteHeader(http.StatusNotFound)
-}
-
-func heartbeat(w http.ResponseWriter, req *http.Request) {
-	setupResponse(w)
-
-	if req.Method == http.MethodPost {
-		if req.Header.Get("Content-Type") != "application/json" {
-			w.WriteHeader(http.StatusUnsupportedMediaType)
-			return
-		}
-
-		server := serverPayload{}
-
-		decoder := json.NewDecoder(req.Body)
-		decoder.DisallowUnknownFields()
-
-		err := decoder.Decode(&server)
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		store.Lock()
-		defer store.Unlock()
-
-		host, _, err := net.SplitHostPort(req.RemoteAddr)
+		b, err := json.Marshal(entries)
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		key := serverKey{
-			Address: host,
-			Port:    server.Port,
-		}
-
-		if entry, ok := store.Servers[key]; ok {
-			// Don't allow a heartbeat if it's too early to prevent spam.
-			if time.Now().Before(entry.Expire.Add(-time.Second * time.Duration(config.HeartbeatIntervalSeconds-config.HeartbeatMinWaitSeconds))) {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-
-			entry.Expire = time.Now().Add(time.Second * time.Duration(config.HeartbeatIntervalSeconds))
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		w.WriteHeader(http.StatusNotFound)
+		w.Write(b)
 		return
 	}
-
 	w.WriteHeader(http.StatusNotFound)
 }

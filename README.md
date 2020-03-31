@@ -38,11 +38,12 @@ You should limit the connection to the memcached server on a firewall level.
 
 Colorize a bit? https://github.com/logrusorgru/aurora
 
-- Servers should be able to register both ipv4 and ipv6 and be identified as the same server.
-
-- Clients should be able to know a ipv4 and ipv6 belongs to the same server.
-
-- Master server should ping server entries to know that port is forwarded and clients can connect aka "fwcheck".
+- [x] Servers should be able to register both ipv4 and ipv6 and be identified as the same server.
+- [x] Clients should be able to know a ipv4 and ipv6 belongs to the same server.
+- [ ] Master server should ping server entries to know that port is forwarded and clients can connect aka "fwcheck".
+- [x] Prevent multiple entries across masters
+- [ ] Add a maximum amount of registered servers per ip
+- [ ] Admin endpoints or maybe use a websocket server
 
 ## Util
 

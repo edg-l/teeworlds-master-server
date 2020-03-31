@@ -11,7 +11,10 @@ require (
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/urfave/cli/v2 v2.2.0
 	github.com/valyala/fasttemplate v1.1.0 // indirect
+	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/vmihailenco/msgpack/v4 v4.3.11
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
+	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
+	google.golang.org/appengine v1.6.5
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
