@@ -44,6 +44,7 @@ Colorize a bit? https://github.com/logrusorgru/aurora
 - [x] Prevent multiple entries across masters
 - [ ] Add a maximum amount of registered servers per ip
 - [ ] Admin endpoints or maybe use a websocket server
+- [ ] Add better logging
 
 ## Util
 

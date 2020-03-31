@@ -84,10 +84,9 @@ func index(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		store.Lock()
-		defer store.Unlock()
-
 		if server.Token != "" {
+			store.Lock()
+			defer store.Unlock()
 			key := serverKey{Token: server.Token}
 			entry, found := store.Servers[key]
 
@@ -114,6 +113,9 @@ func index(w http.ResponseWriter, req *http.Request) {
 
 		key := makeKey()
 
+		store.Lock()
+		defer store.Unlock()
+
 		// Make sure the key is unique
 		for {
 			if _, ok := store.Servers[key]; !ok {
@@ -139,6 +141,7 @@ func index(w http.ResponseWriter, req *http.Request) {
 
 		// Create a goroutine here, so when the defered mutex close gets called, this will proceed.
 		go saveListToCache()
+		go checkServer(host, server.Port, ip.To4() == nil)
 
 		w.WriteHeader(http.StatusCreated)
 		writeJSON(w, &map[string]interface{}{

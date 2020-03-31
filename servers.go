@@ -12,6 +12,11 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
+var fwCheckPacket = []byte{255, 255, 255, 255, 'f', 'w', '?', '?'}
+var fwCheckResponsePacket = []byte{255, 255, 255, 255, 'f', 'w', '!', '!'}
+var fwOkPacket = []byte{255, 255, 255, 255, 'f', 'w', 'o', 'k'}
+var fwErrPacket = []byte{255, 255, 255, 255, 'f', 'w', 'e', 'r'}
+
 type serverKey struct {
 	Token string
 }
@@ -118,4 +123,67 @@ func getServerList() ([]serverEntry, error) {
 	}
 
 	return totalEntries, nil
+}
+
+func packetEquals(a []byte, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func checkServer(address string, port uint16, ipv6 bool) bool {
+	format := "%s:%d"
+
+	if ipv6 {
+		format = "[%s]:%d"
+	}
+
+	raddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(format, address, port))
+
+	if err != nil {
+		log.Errorf("Error resolving udp address %s:%u -> %s\n", address, port, err.Error())
+		return false
+	}
+
+	conn, err := net.DialUDP("udp", nil, raddr)
+
+	if err != nil {
+		log.Errorf("Error connecting to udp address %s:%u -> %s\n", address, port, err.Error())
+		return false
+	}
+
+	defer conn.Close()
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second * time.Duration(config.SocketTimeoutSeconds)))
+	_, err = fmt.Fprint(conn, fwCheckPacket)
+
+	buffer := make([]byte, len(fwCheckResponsePacket))
+
+	conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(config.SocketTimeoutSeconds)))
+	_, _, err = conn.ReadFrom(buffer)
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second * time.Duration(config.SocketTimeoutSeconds)))
+	if err != nil {
+		log.Errorf("Timeout/Error on %s:%u -> %s\n", address, port, err.Error())
+		fmt.Fprint(conn, fwErrPacket)
+		return false
+	}
+
+	if packetEquals(buffer, fwCheckResponsePacket) {
+		log.Info("Received fwcheck response.")
+		fmt.Fprint(conn, fwOkPacket)
+		return true
+	}
+
+	log.Info("Received invalid fwcheck response: ", buffer)
+	fmt.Fprint(conn, fwErrPacket)
+	return false
 }
